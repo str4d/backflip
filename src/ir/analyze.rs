@@ -17,7 +17,25 @@ pub(crate) struct Command {
 
 impl Command {
     pub(super) fn run(self) -> Result<()> {
-        // TODO
+        let mut contents = String::new();
+        File::open(self.file)?.read_to_string(&mut contents)?;
+        let (_, buttons) =
+            parse::ir_file(&contents).map_err(|e| eyre!("Invalid .ir file: {}", e))?;
+
+        if buttons.is_empty() {
+            return Err(eyre!("No buttons in .ir file"));
+        }
+
+        let raw = || {
+            buttons.iter().filter_map(|b| match &b.kind {
+                ButtonKind::Raw(raw) => Some(raw),
+                _ => None,
+            })
+        };
+        if raw().filter(|b| !b.data.is_empty()).count() == 0 {
+            return Err(eyre!("No raw data in any of the buttons in .ir file"));
+        }
+
         Ok(())
     }
 }
