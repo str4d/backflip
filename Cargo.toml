@@ -7,3 +7,6 @@ description = "TBD"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
+clap = { version = "4.0", features = ["derive"] }
+color-eyre = "0.6.2"
+nom = "7.1"
