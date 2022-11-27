@@ -3,7 +3,7 @@ name = "backflip"
 version = "0.0.0"
 authors = ["Jack Grigg <thestr4d@gmail.com>"]
 edition = "2021"
-description = "TBD"
+description = "Help your Flipper Zero perform tricks!"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
