@@ -37,21 +37,44 @@ impl Command {
         }
 
         let preamble = || raw().flat_map(|b| b.data.first());
-        let bit_mark = || raw().flat_map(|b| b.data.iter().skip(1).map(|(on, _)| on));
-        let bit_space = || raw().flat_map(|b| b.data.iter().skip(1).map(|(_, off)| off));
+        let mark = || raw().flat_map(|b| b.data.iter().skip(1).map(|(on, _)| on));
+        let space = || raw().flat_map(|b| b.data.iter().skip(1).map(|(_, off)| off));
 
         let preamble_mark = avg(preamble().map(|(on, _)| on));
         let preamble_space = avg(preamble().map(|(_, off)| off));
 
+        // Identify a repeat marker by looking for a very long space.
+        let repeat_marker = {
+            let mut repeat = None;
+            let mut metrics = Metrics::new();
+            for (i, space) in space().enumerate() {
+                let new_metrics = metrics.accumulate(*space);
+                if new_metrics.max > 10 * new_metrics.average() {
+                    repeat = Some((i, new_metrics.max / 2));
+                    break;
+                }
+                metrics = new_metrics;
+            }
+            repeat
+        };
+
+        // If we find a repeat marker, only treat pulses before it as bits. Otherwise,
+        // treat all pulses as bits.
+        let is_bit = |i| match repeat_marker {
+            Some((bit_count, _)) => i < bit_count,
+            None => true,
+        };
+        let filter_bits = |(i, b)| is_bit(i).then(|| b);
+        let bit_mark = || mark().enumerate().filter_map(filter_bits);
+        let bit_space = || space().enumerate().filter_map(filter_bits);
+
         let bit_mark_divider = {
-            let min_on = bit_mark().min().unwrap();
-            let max_on = bit_mark().max().unwrap();
-            (min_on + max_on) / 2
+            let metrics = bit_mark().fold(Metrics::new(), |acc, value| acc.accumulate(*value));
+            (metrics.min + metrics.max) / 2
         };
         let bit_space_divider = {
-            let min_off = bit_space().min().unwrap();
-            let max_off = bit_space().max().unwrap();
-            (min_off + max_off) / 2
+            let metrics = bit_space().fold(Metrics::new(), |acc, value| acc.accumulate(*value));
+            (metrics.min + metrics.max) / 2
         };
 
         let bit0_mark = avg(bit_mark().filter(|v| v <= &&bit_mark_divider));
@@ -97,7 +120,13 @@ impl Command {
             println!("- {}", button.name);
             if let ButtonKind::Raw(raw) = button.kind {
                 print!(" ");
-                for (i, bit) in raw.data.iter().skip(1).enumerate() {
+                for (i, bit) in raw
+                    .data
+                    .iter()
+                    .skip(1)
+                    .enumerate()
+                    .filter(|(i, _)| is_bit(*i))
+                {
                     print!(
                         "{}{}",
                         if i % 8 == 0 { " " } else { "" },
@@ -109,6 +138,41 @@ impl Command {
         }
 
         Ok(())
+    }
+}
+
+#[derive(Debug)]
+struct Metrics {
+    count: u32,
+    sum: u32,
+    min: u32,
+    max: u32,
+}
+
+impl Metrics {
+    fn new() -> Self {
+        Metrics {
+            count: 0,
+            sum: 0,
+            min: u32::MAX,
+            max: 0,
+        }
+    }
+
+    fn accumulate(&self, value: u32) -> Self {
+        Metrics {
+            count: self.count + 1,
+            sum: self.sum + value,
+            min: self.min.min(value),
+            max: self.max.max(value),
+        }
+    }
+
+    fn average(&self) -> u32 {
+        match self.count {
+            0 => 0,
+            _ => self.sum / self.count,
+        }
     }
 }
 
