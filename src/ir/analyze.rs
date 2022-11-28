@@ -115,7 +115,7 @@ impl Command {
         println!("- Bit1 mark:      {}", bit1_mark);
         println!("- Bit1 space:     {}", bit1_space);
         println!();
-        println!("Button data:");
+        println!("Button data | Extra data (if present)");
         for button in buttons {
             println!("- {}", button.name);
             if let ButtonKind::Raw(raw) = button.kind {
@@ -132,6 +132,18 @@ impl Command {
                         if i % 8 == 0 { " " } else { "" },
                         bit_extractor(bit),
                     );
+                }
+                print!(" |");
+                for value in raw
+                    .data
+                    .iter()
+                    .skip(1)
+                    .enumerate()
+                    .filter_map(|(i, b)| (!is_bit(i)).then(|| b))
+                    .flat_map(|(a, b)| [a, b])
+                    .chain(raw.final_on.as_ref())
+                {
+                    print!(" {}", value);
                 }
                 println!();
             }
